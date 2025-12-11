@@ -42,21 +42,39 @@ export function Settings(props) {
                         </div>
 
                         <div class="pyrunner-plugin-install">
-                            <button id="pyrunner_install_plugin" class="menu_button" title="Install server plugin using Files API (requires LennySuite Files plugin)">
-                                <i class="fa-solid fa-download"></i> Install Plugin
-                            </button>
-                            <button id="pyrunner_enable_plugins" class="menu_button" title="Enable server plugins in config.yaml">
-                                <i class="fa-solid fa-toggle-on"></i> Enable in Config
+                            <button id="pyrunner_install_plugin" class="menu_button" title="Reinstall server plugin using Files API (requires LennySuite Files plugin)">
+                                <i class="fa-solid fa-rotate"></i> Reinstall Plugin
                             </button>
                             <button id="pyrunner_copy_install_cmd" class="menu_button" title="Copy manual install instructions">
                                 <i class="fa-solid fa-copy"></i> Manual
                             </button>
                         </div>
-                        <small class="pyrunner-hint">Requires LennySuite Files plugin. After install, restart SillyTavern.</small>
+                        <small class="pyrunner-hint">Reinstall if plugin is outdated. Requires Files plugin. Restart after reinstall.</small>
 
                         <div class="pyrunner-server-status-row">
                             <label>Server Status:</label>
                             <span id="pyrunner_server_status" class="pyrunner-status-na">N/A</span>
+                        </div>
+
+                        <div class="pyrunner-packages-section">
+                            <label class="pyrunner-label">Install Python Packages</label>
+                            <div class="pyrunner-packages-input-row">
+                                <input type="text" id="pyrunner_package_input" class="text_pole" placeholder="e.g. numpy pandas requests">
+                                <button id="pyrunner_install_packages" class="menu_button">
+                                    <i class="fa-solid fa-download"></i> Install
+                                </button>
+                            </div>
+                            <small class="pyrunner-hint">Space-separated package names. Uses pip install (server mode only).</small>
+
+                            <div class="pyrunner-packages-list-header">
+                                <label class="pyrunner-label">Installed Packages</label>
+                                <button id="pyrunner_refresh_packages" class="menu_button menu_button_icon" title="Refresh package list">
+                                    <i class="fa-solid fa-refresh"></i>
+                                </button>
+                            </div>
+                            <div id="pyrunner_packages_list" class="pyrunner-packages-list">
+                                <span class="pyrunner-hint">Click refresh to load packages</span>
+                            </div>
                         </div>
 
                         <label class="pyrunner-label" for="pyrunner_timeout">Timeout (ms)</label>
@@ -212,6 +230,102 @@ export function Settings(props) {
                 align-items: center;
                 gap: 5px;
                 text-decoration: none;
+            }
+
+            .pyrunner-packages-section {
+                margin: 10px 0;
+            }
+
+            .pyrunner-packages-input-row {
+                display: flex;
+                gap: 10px;
+                align-items: center;
+            }
+
+            .pyrunner-packages-input-row input {
+                flex: 1;
+            }
+
+            .pyrunner-packages-input-row .menu_button {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                white-space: nowrap;
+            }
+
+            .pyrunner-packages-list-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-top: 10px;
+            }
+
+            .pyrunner-packages-list-header .menu_button_icon {
+                padding: 3px 8px;
+                min-width: unset;
+            }
+
+            .pyrunner-packages-list {
+                max-height: 150px;
+                overflow-y: auto;
+                background: rgba(0, 0, 0, 0.2);
+                border-radius: 5px;
+                padding: 8px;
+                margin-top: 5px;
+                font-size: 0.85em;
+            }
+
+            .pyrunner-package-item {
+                display: inline-block;
+                background: rgba(0, 0, 0, 0.3);
+                padding: 2px 8px;
+                border-radius: 3px;
+                margin: 2px;
+            }
+
+            .pyrunner-package-version {
+                opacity: 0.7;
+                margin-left: 3px;
+            }
+
+            .pyrunner-package-item {
+                cursor: pointer;
+                transition: background 0.2s;
+            }
+
+            .pyrunner-package-item:hover {
+                background: rgba(255, 255, 255, 0.1);
+            }
+
+            .pyrunner-package-popup {
+                position: fixed;
+                background: var(--SmartThemeBlurTintColor, #333);
+                border: 1px solid var(--SmartThemeBorderColor, #555);
+                border-radius: 5px;
+                padding: 5px 0;
+                z-index: 10000;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+                min-width: 120px;
+            }
+
+            .pyrunner-package-popup-item {
+                padding: 8px 15px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .pyrunner-package-popup-item:hover {
+                background: rgba(255, 255, 255, 0.1);
+            }
+
+            .pyrunner-package-popup-item.danger {
+                color: #f44336;
+            }
+
+            .pyrunner-package-popup-item.danger:hover {
+                background: rgba(244, 67, 54, 0.2);
             }
         </style>
     `;

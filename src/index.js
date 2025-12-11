@@ -142,9 +142,10 @@ function registerSlashCommand() {
             }
 
             try {
+                const { getRequestHeaders } = SillyTavern.getContext();
                 const response = await fetch(`${extensionSettings.serverUrl}/install`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { ...getRequestHeaders(), 'Content-Type': 'application/json' },
                     body: JSON.stringify({ packages }),
                 });
 
@@ -424,58 +425,229 @@ async function installServerPlugin(button) {
 }
 
 /**
- * Enable server plugins in config.yaml
- * @param {HTMLElement} button - The button element
+ * Refresh the installed packages list
+ * @param {HTMLElement} button - The refresh button
  */
-async function enableServerPlugins(button) {
-    const originalText = button.innerHTML;
-    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Updating...';
+async function refreshPackageList(button) {
+    const listEl = document.querySelector('#pyrunner_packages_list');
+    if (!listEl) return;
+
+    const originalHtml = button.innerHTML;
+    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
     button.disabled = true;
 
     try {
-        // Read config.yaml
-        const readResult = await readFileViaFilesApi('config.yaml');
-        if (!readResult.ok) {
-            throw new Error('Files plugin not available. Please manually edit config.yaml and set enableServerPlugins: true');
+        const { getRequestHeaders } = SillyTavern.getContext();
+        const response = await fetch(`${extensionSettings.serverUrl}/packages`, {
+            method: 'GET',
+            headers: getRequestHeaders(),
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to fetch packages');
         }
 
-        let configContent = readResult.text || '';
+        const result = await response.json();
 
-        // Check if already enabled
-        if (/enableServerPlugins:\s*true/i.test(configContent)) {
-            button.innerHTML = '<i class="fa-solid fa-check"></i> Already Enabled';
-            alert('Server plugins are already enabled in config.yaml');
+        if (result.error) {
+            listEl.innerHTML = `<span class="pyrunner-hint">Error: ${result.error}</span>`;
             return;
         }
 
-        // Update or add the setting
-        if (/enableServerPlugins:\s*false/i.test(configContent)) {
-            configContent = configContent.replace(/enableServerPlugins:\s*false/i, 'enableServerPlugins: true');
-        } else if (/enableServerPlugins:/i.test(configContent)) {
-            configContent = configContent.replace(/enableServerPlugins:\s*\S*/i, 'enableServerPlugins: true');
-        } else {
-            // Add to end of file
-            configContent = configContent.trimEnd() + '\\nenableServerPlugins: true\\n';
+        if (!result.packages || result.packages.length === 0) {
+            listEl.innerHTML = '<span class="pyrunner-hint">No packages found</span>';
+            return;
         }
 
-        // Write back
-        const writeResult = await writeFileViaFilesApi('config.yaml', configContent);
-        if (!writeResult.ok) {
-            throw new Error(writeResult.error || 'Failed to update config.yaml');
-        }
+        // Sort alphabetically
+        result.packages.sort((a, b) => a.name.localeCompare(b.name));
 
-        button.innerHTML = '<i class="fa-solid fa-check"></i> Enabled!';
-        alert('Server plugins enabled!\\n\\nPlease restart SillyTavern for changes to take effect.');
+        listEl.innerHTML = result.packages.map(pkg =>
+            `<span class="pyrunner-package-item" data-package="${pkg.name}">${pkg.name}<span class="pyrunner-package-version">${pkg.version}</span></span>`
+        ).join('');
+
+        // Add click handlers to each package
+        listEl.querySelectorAll('.pyrunner-package-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                showPackagePopup(e, item.dataset.package);
+            });
+        });
 
     } catch (error) {
-        console.error('[PyRunner] Config update error:', error);
-        button.innerHTML = '<i class="fa-solid fa-times"></i> Failed';
-        alert('Failed to update config: ' + error.message);
+        console.error(`[${MODULE_NAME}] Package list error:`, error);
+        listEl.innerHTML = `<span class="pyrunner-hint">Error: ${error.message}</span>`;
     } finally {
-        setTimeout(() => {
-            button.innerHTML = originalText;
-            button.disabled = false;
-        }, 3000);
+        button.innerHTML = originalHtml;
+        button.disabled = false;
+    }
+}
+
+/**
+ * Show popup menu for a package
+ * @param {Event} e - Click event
+ * @param {string} packageName - Package name
+ */
+function showPackagePopup(e, packageName) {
+    // Remove any existing popup
+    const existingPopup = document.querySelector('.pyrunner-package-popup');
+    if (existingPopup) existingPopup.remove();
+
+    const popup = document.createElement('div');
+    popup.className = 'pyrunner-package-popup';
+    popup.innerHTML = `
+        <div class="pyrunner-package-popup-item" data-action="copy">
+            <i class="fa-solid fa-copy"></i> Copy Name
+        </div>
+        <div class="pyrunner-package-popup-item danger" data-action="uninstall">
+            <i class="fa-solid fa-trash"></i> Uninstall
+        </div>
+    `;
+
+    // Position popup near click
+    popup.style.left = `${e.clientX}px`;
+    popup.style.top = `${e.clientY}px`;
+
+    document.body.appendChild(popup);
+
+    // Adjust if popup goes off screen
+    const rect = popup.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+        popup.style.left = `${window.innerWidth - rect.width - 10}px`;
+    }
+    if (rect.bottom > window.innerHeight) {
+        popup.style.top = `${window.innerHeight - rect.height - 10}px`;
+    }
+
+    // Handle actions
+    popup.querySelector('[data-action="copy"]').addEventListener('click', async () => {
+        try {
+            await navigator.clipboard.writeText(packageName);
+            window.toastr.success(`Copied: ${packageName}`);
+        } catch {
+            window.toastr.error('Failed to copy');
+        }
+        popup.remove();
+    });
+
+    popup.querySelector('[data-action="uninstall"]').addEventListener('click', async () => {
+        popup.remove();
+        await uninstallPackage(packageName);
+    });
+
+    // Close on click outside
+    const closePopup = (event) => {
+        if (!popup.contains(event.target)) {
+            popup.remove();
+            document.removeEventListener('click', closePopup);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closePopup), 0);
+}
+
+/**
+ * Uninstall a Python package
+ * @param {string} packageName - Package name
+ */
+async function uninstallPackage(packageName) {
+    const toastr = window.toastr;
+
+    if (!confirm(`Are you sure you want to uninstall "${packageName}"?`)) {
+        return;
+    }
+
+    toastr.info(`Uninstalling ${packageName}...`);
+
+    try {
+        const { getRequestHeaders } = SillyTavern.getContext();
+        const response = await fetch(`${extensionSettings.serverUrl}/uninstall`, {
+            method: 'POST',
+            headers: { ...getRequestHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ packages: packageName }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Server error');
+        }
+
+        const result = await response.json();
+
+        if (result.error) {
+            toastr.error(`Failed to uninstall ${packageName}: ${result.error}`);
+        } else {
+            toastr.success(`Uninstalled ${packageName}`);
+            // Refresh the package list
+            const refreshBtn = document.querySelector('#pyrunner_refresh_packages');
+            if (refreshBtn) refreshPackageList(refreshBtn);
+        }
+    } catch (error) {
+        console.error(`[${MODULE_NAME}] Uninstall error:`, error);
+        toastr.error(`Failed to uninstall ${packageName}: ${error.message}`);
+    }
+}
+
+/**
+ * Install Python packages via pip
+ * @param {string} packages - Space-separated package names
+ * @param {HTMLElement} button - The button element
+ */
+async function installPythonPackages(packages, button) {
+    const toastr = window.toastr;
+
+    packages = packages?.trim();
+    if (!packages) {
+        toastr.warning('Please enter package names to install');
+        return;
+    }
+
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Installing...';
+    button.disabled = true;
+
+    try {
+        const { getRequestHeaders } = SillyTavern.getContext();
+        const response = await fetch(`${extensionSettings.serverUrl}/install`, {
+            method: 'POST',
+            headers: { ...getRequestHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ packages }),
+        });
+
+        if (!response.ok) {
+            const err = await response.text();
+            throw new Error(err || 'Server error');
+        }
+
+        const result = await response.json();
+
+        if (result.error) {
+            // Check if it's an "already satisfied" message
+            if (result.error.includes('already satisfied') || result.output?.includes('already satisfied')) {
+                toastr.info(`Package(s) already installed: ${packages}`);
+            } else {
+                toastr.error(`Installation failed: ${result.error}`);
+            }
+        } else if (result.output) {
+            // Check for "already satisfied" in output
+            if (result.output.includes('already satisfied')) {
+                toastr.info(`Package(s) already installed: ${packages}`);
+            } else if (result.output.includes('Successfully installed')) {
+                toastr.success(`Successfully installed: ${packages}`);
+            } else {
+                toastr.success(`Installation complete: ${packages}`);
+            }
+        } else {
+            toastr.success(`Installation complete: ${packages}`);
+        }
+
+        // Clear input on success
+        const input = document.querySelector('#pyrunner_package_input');
+        if (input) input.value = '';
+
+    } catch (error) {
+        console.error(`[${MODULE_NAME}] Package install error:`, error);
+        toastr.error(`Installation failed: ${error.message}`);
+    } finally {
+        button.innerHTML = originalText;
+        button.disabled = false;
     }
 }
 
@@ -530,14 +702,6 @@ function renderSettings() {
         });
     }
 
-    // Enable in config button
-    const enableBtn = extensionDiv.querySelector('#pyrunner_enable_plugins');
-    if (enableBtn) {
-        enableBtn.addEventListener('click', async () => {
-            await enableServerPlugins(enableBtn);
-        });
-    }
-
     // Copy install command button
     const copyBtn = extensionDiv.querySelector('#pyrunner_copy_install_cmd');
     if (copyBtn) {
@@ -554,6 +718,29 @@ function renderSettings() {
                 console.error('Failed to copy:', err);
                 alert('Install instructions:\n\n' + installCmd);
             }
+        });
+    }
+
+    // Install packages button
+    const installPkgBtn = extensionDiv.querySelector('#pyrunner_install_packages');
+    const packageInput = extensionDiv.querySelector('#pyrunner_package_input');
+    if (installPkgBtn && packageInput) {
+        installPkgBtn.addEventListener('click', async () => {
+            await installPythonPackages(packageInput.value, installPkgBtn);
+        });
+        // Allow Enter key to install
+        packageInput.addEventListener('keypress', async (e) => {
+            if (e.key === 'Enter') {
+                await installPythonPackages(packageInput.value, installPkgBtn);
+            }
+        });
+    }
+
+    // Refresh packages button
+    const refreshPkgBtn = extensionDiv.querySelector('#pyrunner_refresh_packages');
+    if (refreshPkgBtn) {
+        refreshPkgBtn.addEventListener('click', async () => {
+            await refreshPackageList(refreshPkgBtn);
         });
     }
 

@@ -1,3 +1,5 @@
+/* global SillyTavern */
+
 /**
  * PyRunner - Handles Python code execution via Pyodide (browser) or server plugin
  */
@@ -8,6 +10,18 @@ export class PyRunner {
         this.pyodide = null;
         this.pyodideReady = false;
         this.pyodideLoading = false;
+    }
+
+    /**
+     * Get request headers including CSRF token
+     * @returns {object}
+     */
+    getHeaders() {
+        const headers = SillyTavern.getContext().getRequestHeaders();
+        return {
+            ...headers,
+            'Content-Type': 'application/json',
+        };
     }
 
     /**
@@ -159,9 +173,7 @@ sys.stderr = StringIO()
         try {
             const response = await fetch(`${this.settings.serverUrl}/execute`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: this.getHeaders(),
                 body: JSON.stringify({ code, timeout }),
                 signal: controller.signal,
             });

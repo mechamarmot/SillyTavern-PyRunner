@@ -88,9 +88,36 @@ function pipInstall(packages, timeout = 120000) {
     });
 }
 
+/**
+ * Check if pip is available
+ * @returns {Promise<boolean>}
+ */
+function checkPipAvailable() {
+    return new Promise((resolve) => {
+        const pythonCmd = getPythonCommand();
+        const proc = spawn(pythonCmd, ['-m', 'pip', '--version'], {
+            timeout: 10000,
+        });
+
+        proc.on('close', (code) => {
+            resolve(code === 0);
+        });
+
+        proc.on('error', () => {
+            resolve(false);
+        });
+    });
+}
+
 async function init(router) {
-    router.get('/status', (req, res) => {
-        res.json({ status: 'ok', plugin: info.name, python: getPythonCommand() });
+    router.get('/status', async (req, res) => {
+        const pipAvailable = await checkPipAvailable();
+        res.json({
+            status: 'ok',
+            plugin: info.name,
+            python: getPythonCommand(),
+            pip: pipAvailable
+        });
     });
 
     router.post('/execute', async (req, res) => {
@@ -116,6 +143,12 @@ async function init(router) {
         if (!packages || typeof packages !== 'string') {
             return res.status(400).json({ error: 'No packages specified' });
         }
+
+        const pipAvailable = await checkPipAvailable();
+        if (!pipAvailable) {
+            return res.status(400).json({ error: 'pip is not installed or not available. Please install pip first.' });
+        }
+
         try {
             const result = await pipInstall(packages);
             if (result.error) {
@@ -124,6 +157,87 @@ async function init(router) {
             res.json({ output: result.output });
         } catch (error) {
             console.error('[PyRunner] Install error:', error);
+            res.status(500).json({ error: error.message });
+        }
+    });
+
+    router.post('/uninstall', async (req, res) => {
+        const { packages } = req.body;
+        if (!packages || typeof packages !== 'string') {
+            return res.status(400).json({ error: 'No packages specified' });
+        }
+
+        const pipAvailable = await checkPipAvailable();
+        if (!pipAvailable) {
+            return res.status(400).json({ error: 'pip is not installed or not available.' });
+        }
+
+        try {
+            const pythonCmd = getPythonCommand();
+            const args = ['-m', 'pip', 'uninstall', '-y', ...packages.split(/\s+/).filter(p => p)];
+            const proc = spawn(pythonCmd, args, {
+                timeout: 120000,
+                maxBuffer: 1024 * 1024,
+            });
+
+            let stdout = '';
+            let stderr = '';
+
+            proc.stdout.on('data', (data) => { stdout += data.toString(); });
+            proc.stderr.on('data', (data) => { stderr += data.toString(); });
+
+            proc.on('close', (code) => {
+                if (code !== 0) {
+                    return res.json({ output: stdout, error: stderr.trim() || 'Uninstall failed' });
+                }
+                res.json({ output: stdout.trim() });
+            });
+
+            proc.on('error', (err) => {
+                res.status(500).json({ error: err.message });
+            });
+        } catch (error) {
+            console.error('[PyRunner] Uninstall error:', error);
+            res.status(500).json({ error: error.message });
+        }
+    });
+
+    router.get('/packages', async (req, res) => {
+        const pipAvailable = await checkPipAvailable();
+        if (!pipAvailable) {
+            return res.json({ packages: [], error: 'pip is not installed or not available.' });
+        }
+
+        try {
+            // Use pip list --format=freeze which works universally
+            const pythonCmd = getPythonCommand();
+            const proc = spawn(pythonCmd, ['-m', 'pip', 'list', '--format=freeze'], {
+                timeout: 30000,
+                maxBuffer: 1024 * 1024,
+            });
+
+            let stdout = '';
+            let stderr = '';
+
+            proc.stdout.on('data', (data) => { stdout += data.toString(); });
+            proc.stderr.on('data', (data) => { stderr += data.toString(); });
+
+            proc.on('close', (code) => {
+                if (code !== 0 && !stdout) {
+                    return res.json({ packages: [], error: stderr.trim() || 'Failed to list packages' });
+                }
+                const packages = stdout.split('\n').filter(p => p.trim()).map(p => {
+                    const [name, version] = p.split('==');
+                    return { name: name || p, version: version || '' };
+                });
+                res.json({ packages });
+            });
+
+            proc.on('error', (err) => {
+                res.status(500).json({ error: err.message });
+            });
+        } catch (error) {
+            console.error('[PyRunner] List packages error:', error);
             res.status(500).json({ error: error.message });
         }
     });

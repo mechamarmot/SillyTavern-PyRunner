@@ -1,0 +1,12 @@
+{
+    "display_name": "PyRunner",
+    "loading_order": 1,
+    "requires": [],
+    "optional": [],
+    "js": "dist/index.js",
+    "css": "",
+    "author": "mechamarmot",
+    "version": "1.0.0",
+    "homePage": "https://github.com/mechamarmot/SillyTavern-PyRunner",
+    "auto_update": true
+}

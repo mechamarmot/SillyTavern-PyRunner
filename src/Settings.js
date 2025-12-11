@@ -4,7 +4,7 @@
  * @returns {string} - HTML string
  */
 export function Settings(props) {
-    const { executionMode, timeout } = props;
+    const { enabled, executionMode, timeout } = props;
 
     return `
         <div class="pyrunner-settings">
@@ -15,6 +15,18 @@ export function Settings(props) {
                 </div>
                 <div class="inline-drawer-content">
                     <div class="pyrunner-settings-content">
+                        <div class="pyrunner-warning">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <span>WARNING: USE AT YOUR OWN RISK</span>
+                        </div>
+
+                        <div class="pyrunner-toggle-row">
+                            <label for="pyrunner_enabled">Enable PyRunner</label>
+                            <input type="checkbox" id="pyrunner_enabled" ${enabled ? 'checked' : ''}>
+                        </div>
+
+                        <hr>
+
                         <label class="pyrunner-label">Execution Mode</label>
                         <div class="pyrunner-radio-group">
                             <label class="radio-label">
@@ -40,10 +52,10 @@ export function Settings(props) {
 
                         <hr>
                         <div class="pyrunner-help">
-                            <b>Usage:</b>
+                            <div class="pyrunner-help-title">Usage:</div>
                             <code>/pyrun &lt;python code&gt;</code>
                             <br><br>
-                            <b>Examples:</b>
+                            <div class="pyrunner-help-title">Examples:</div>
                             <ul>
                                 <li><code>/pyrun print("Hello!")</code></li>
                                 <li><code>/pyrun 2 + 2</code></li>
@@ -61,6 +73,32 @@ export function Settings(props) {
                 flex-direction: column;
                 gap: 10px;
                 padding: 10px 0;
+            }
+
+            .pyrunner-warning {
+                background: #8b0000;
+                color: #fff;
+                padding: 10px 15px;
+                border-radius: 5px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                font-weight: bold;
+            }
+
+            .pyrunner-warning i {
+                font-size: 1.2em;
+            }
+
+            .pyrunner-toggle-row {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 5px 0;
+            }
+
+            .pyrunner-toggle-row label {
+                font-weight: bold;
             }
 
             .pyrunner-label {
@@ -93,7 +131,8 @@ export function Settings(props) {
             }
 
             .pyrunner-hint {
-                color: var(--SmartThemeQuoteColor);
+                color: var(--SmartThemeBodyColor);
+                opacity: 0.7;
                 font-size: 0.85em;
                 margin-left: 20px;
             }
@@ -116,20 +155,27 @@ export function Settings(props) {
             }
 
             .pyrunner-status-na {
-                color: var(--SmartThemeQuoteColor);
+                opacity: 0.7;
             }
 
             .pyrunner-help {
-                background: var(--SmartThemeBlurTintColor);
+                background: rgba(0, 0, 0, 0.2);
                 padding: 10px;
                 border-radius: 5px;
                 font-size: 0.9em;
             }
 
+            .pyrunner-help-title {
+                font-weight: bold;
+                margin-bottom: 5px;
+            }
+
             .pyrunner-help code {
-                background: var(--SmartThemeBodyColor);
-                padding: 2px 5px;
+                background: rgba(0, 0, 0, 0.3);
+                color: inherit;
+                padding: 2px 6px;
                 border-radius: 3px;
+                font-family: monospace;
             }
 
             .pyrunner-help ul {

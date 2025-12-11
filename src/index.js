@@ -12,6 +12,7 @@ const {
 
 // Extension settings
 const defaultSettings = {
+    enabled: false,
     executionMode: 'pyodide', // 'pyodide' or 'server'
     serverUrl: '/api/plugins/pyrunner',
     timeout: 30000,
@@ -67,6 +68,10 @@ function registerSlashCommand() {
     SlashCommandParser.addCommandObject(SlashCommand.fromProps({
         name: 'pyrun',
         callback: async (namedArgs, unnamedArgs) => {
+            if (!extensionSettings.enabled) {
+                return 'Error: PyRunner is disabled. Enable it in Extensions > PyRunner settings.';
+            }
+
             const code = unnamedArgs?.toString() || '';
             if (!code.trim()) {
                 return 'Error: No Python code provided';
@@ -133,17 +138,9 @@ function registerSlashCommand() {
  */
 function renderSettings() {
     const settingsHtml = Settings({
+        enabled: extensionSettings.enabled,
         executionMode: extensionSettings.executionMode,
         timeout: extensionSettings.timeout,
-        onModeChange: (mode) => {
-            extensionSettings.executionMode = mode;
-            pyRunner.setMode(mode);
-            saveSettingsDebounced();
-        },
-        onTimeoutChange: (timeout) => {
-            extensionSettings.timeout = timeout;
-            saveSettingsDebounced();
-        },
     });
 
     const settingsContainer = document.getElementById('extensions_settings');
@@ -153,6 +150,14 @@ function renderSettings() {
     settingsContainer.appendChild(extensionDiv);
 
     // Add event listeners
+    const enabledCheckbox = extensionDiv.querySelector('#pyrunner_enabled');
+    if (enabledCheckbox) {
+        enabledCheckbox.addEventListener('change', (e) => {
+            extensionSettings.enabled = e.target.checked;
+            saveSettingsDebounced();
+        });
+    }
+
     const modeRadios = extensionDiv.querySelectorAll('input[name="pyrunner_mode"]');
     modeRadios.forEach(radio => {
         radio.addEventListener('change', (e) => {

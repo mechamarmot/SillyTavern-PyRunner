@@ -43,12 +43,16 @@ export function Settings(props) {
 
                         <div class="pyrunner-plugin-install">
                             <button id="pyrunner_install_plugin" class="menu_button" title="Install server plugin using Files API (requires LennySuite Files plugin)">
-                                <i class="fa-solid fa-download"></i> Install Server Plugin
+                                <i class="fa-solid fa-download"></i> Install Plugin
                             </button>
-                            <button id="pyrunner_copy_install_cmd" class="menu_button" title="Copy manual install command to clipboard">
-                                <i class="fa-solid fa-copy"></i> Copy Command
+                            <button id="pyrunner_enable_plugins" class="menu_button" title="Enable server plugins in config.yaml">
+                                <i class="fa-solid fa-toggle-on"></i> Enable in Config
+                            </button>
+                            <button id="pyrunner_copy_install_cmd" class="menu_button" title="Copy manual install instructions">
+                                <i class="fa-solid fa-copy"></i> Manual
                             </button>
                         </div>
+                        <small class="pyrunner-hint">Requires LennySuite Files plugin. After install, restart SillyTavern.</small>
 
                         <div class="pyrunner-server-status-row">
                             <label>Server Status:</label>

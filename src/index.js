@@ -273,6 +273,81 @@ async function installServerPlugin(button) {
 }
 
 /**
+ * Enable server plugins in config.yaml
+ * @param {HTMLElement} button - The button element
+ */
+async function enableServerPlugins(button) {
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Updating...';
+    button.disabled = true;
+
+    try {
+        // Check if Files API is available
+        const checkResponse = await fetch('/api/plugins/files-v2/get?path=config.yaml');
+        if (!checkResponse.ok) {
+            throw new Error('Files plugin not available. Please manually edit config.yaml and set enableServerPlugins: true');
+        }
+
+        const configResult = await checkResponse.json();
+        if (!configResult.ok) {
+            throw new Error('Could not read config.yaml: ' + (configResult.error || 'Unknown error'));
+        }
+
+        let configContent = configResult.data.text || '';
+
+        // Check if already enabled
+        if (/enableServerPlugins:\s*true/i.test(configContent)) {
+            button.innerHTML = '<i class="fa-solid fa-check"></i> Already Enabled';
+            alert('Server plugins are already enabled in config.yaml');
+            return;
+        }
+
+        // Update or add the setting
+        if (/enableServerPlugins:\s*false/i.test(configContent)) {
+            configContent = configContent.replace(/enableServerPlugins:\s*false/i, 'enableServerPlugins: true');
+        } else if (/enableServerPlugins:/i.test(configContent)) {
+            configContent = configContent.replace(/enableServerPlugins:\s*\S*/i, 'enableServerPlugins: true');
+        } else {
+            // Add to end of file
+            configContent = configContent.trimEnd() + '\\nenableServerPlugins: true\\n';
+        }
+
+        // Write back
+        const writeResponse = await fetch('/api/plugins/files-v2/put', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                path: 'config.yaml',
+                text: configContent,
+                overwrite: true,
+            }),
+        });
+
+        if (!writeResponse.ok) {
+            throw new Error('Failed to write config.yaml');
+        }
+
+        const result = await writeResponse.json();
+        if (!result.ok) {
+            throw new Error(result.error || 'Failed to update config.yaml');
+        }
+
+        button.innerHTML = '<i class="fa-solid fa-check"></i> Enabled!';
+        alert('Server plugins enabled!\\n\\nPlease restart SillyTavern for changes to take effect.');
+
+    } catch (error) {
+        console.error('[PyRunner] Config update error:', error);
+        button.innerHTML = '<i class="fa-solid fa-times"></i> Failed';
+        alert('Failed to update config: ' + error.message);
+    } finally {
+        setTimeout(() => {
+            button.innerHTML = originalText;
+            button.disabled = false;
+        }, 3000);
+    }
+}
+
+/**
  * Render extension settings UI
  */
 function renderSettings() {
@@ -320,6 +395,14 @@ function renderSettings() {
     if (installBtn) {
         installBtn.addEventListener('click', async () => {
             await installServerPlugin(installBtn);
+        });
+    }
+
+    // Enable in config button
+    const enableBtn = extensionDiv.querySelector('#pyrunner_enable_plugins');
+    if (enableBtn) {
+        enableBtn.addEventListener('click', async () => {
+            await enableServerPlugins(enableBtn);
         });
     }
 

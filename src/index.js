@@ -131,6 +131,59 @@ function registerSlashCommand() {
     }));
 
     console.log(`[${MODULE_NAME}] Slash command /pyrun registered`);
+
+    // Register /pyinstall command
+    SlashCommandParser.addCommandObject(SlashCommand.fromProps({
+        name: 'pyinstall',
+        callback: async (namedArgs, unnamedArgs) => {
+            const packages = unnamedArgs?.toString().trim() || '';
+            if (!packages) {
+                return 'Error: No packages specified. Usage: /pyinstall numpy pandas';
+            }
+
+            try {
+                const response = await fetch(`${extensionSettings.serverUrl}/install`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ packages }),
+                });
+
+                if (!response.ok) {
+                    const err = await response.text();
+                    throw new Error(err || 'Server error');
+                }
+
+                const result = await response.json();
+                if (result.error) {
+                    return `Error: ${result.error}`;
+                }
+                return result.output || 'Packages installed successfully';
+            } catch (error) {
+                console.error(`[${MODULE_NAME}] Install error:`, error);
+                return `Error: ${error.message}`;
+            }
+        },
+        unnamedArgumentList: [
+            SlashCommandArgument.fromProps({
+                description: 'Package names to install (space-separated)',
+                typeList: [ARGUMENT_TYPE.STRING],
+                isRequired: true,
+            }),
+        ],
+        helpString: `
+            <div>
+                Installs Python packages using pip (server mode only).
+                <br><br>
+                <strong>Examples:</strong>
+                <ul>
+                    <li><code>/pyinstall numpy</code></li>
+                    <li><code>/pyinstall pandas matplotlib</code></li>
+                </ul>
+            </div>
+        `,
+    }));
+
+    console.log(`[${MODULE_NAME}] Slash command /pyinstall registered`);
 }
 
 // Server plugin source code
@@ -187,6 +240,43 @@ function executePython(code, timeout = 30000) {
     });
 }
 
+function pipInstall(packages, timeout = 120000) {
+    return new Promise((resolve, reject) => {
+        const pythonCmd = getPythonCommand();
+        const args = ['-m', 'pip', 'install', ...packages.split(/\\s+/).filter(p => p)];
+        const proc = spawn(pythonCmd, args, {
+            timeout: timeout,
+            maxBuffer: 1024 * 1024,
+            env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        proc.stdout.on('data', (data) => { stdout += data.toString(); });
+        proc.stderr.on('data', (data) => { stderr += data.toString(); });
+
+        const timeoutId = setTimeout(() => {
+            proc.kill('SIGTERM');
+            reject(new Error('Installation timed out'));
+        }, timeout);
+
+        proc.on('close', (code) => {
+            clearTimeout(timeoutId);
+            if (code !== 0) {
+                resolve({ output: stdout, error: stderr.trim() || 'Installation failed' });
+            } else {
+                resolve({ output: stdout.trim(), error: null });
+            }
+        });
+
+        proc.on('error', (err) => {
+            clearTimeout(timeoutId);
+            reject(new Error('Failed to run pip: ' + err.message));
+        });
+    });
+}
+
 async function init(router) {
     router.get('/status', (req, res) => {
         res.json({ status: 'ok', plugin: info.name, python: getPythonCommand() });
@@ -210,6 +300,23 @@ async function init(router) {
         }
     });
 
+    router.post('/install', async (req, res) => {
+        const { packages } = req.body;
+        if (!packages || typeof packages !== 'string') {
+            return res.status(400).json({ error: 'No packages specified' });
+        }
+        try {
+            const result = await pipInstall(packages);
+            if (result.error) {
+                return res.json({ output: result.output, error: result.error });
+            }
+            res.json({ output: result.output });
+        } catch (error) {
+            console.error('[PyRunner] Install error:', error);
+            res.status(500).json({ error: error.message });
+        }
+    });
+
     console.log('[' + info.name + '] Plugin initialized');
 }
 
@@ -221,6 +328,71 @@ module.exports = { init, exit, info };
 `;
 
 /**
+ * Try to write a file using Files API (tries both v1 and v2 endpoints)
+ * @param {string} path - File path
+ * @param {string} text - File content
+ * @returns {Promise<{ok: boolean, error?: string}>}
+ */
+async function writeFileViaFilesApi(path, text) {
+    // Try files v1 first
+    try {
+        const response = await fetch('/api/plugins/files/put', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path, text, overwrite: true }),
+        });
+        if (response.ok) {
+            const result = await response.json();
+            if (result.ok !== false) return { ok: true };
+            if (result.error) return { ok: false, error: result.error };
+        }
+    } catch (e) { /* try v2 */ }
+
+    // Try files v2
+    try {
+        const response = await fetch('/api/plugins/files-v2/put', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path, text, overwrite: true }),
+        });
+        if (response.ok) {
+            const result = await response.json();
+            if (result.ok !== false) return { ok: true };
+            if (result.error) return { ok: false, error: result.error };
+        }
+    } catch (e) { /* failed */ }
+
+    return { ok: false, error: 'Files plugin not available. Please install LennySuite Files plugin first.' };
+}
+
+/**
+ * Try to read a file using Files API (tries both v1 and v2 endpoints)
+ * @param {string} path - File path
+ * @returns {Promise<{ok: boolean, text?: string, error?: string}>}
+ */
+async function readFileViaFilesApi(path) {
+    // Try files v1 first
+    try {
+        const response = await fetch('/api/plugins/files/get?path=' + encodeURIComponent(path));
+        if (response.ok) {
+            const result = await response.json();
+            if (result.ok !== false && result.data?.text) return { ok: true, text: result.data.text };
+        }
+    } catch (e) { /* try v2 */ }
+
+    // Try files v2
+    try {
+        const response = await fetch('/api/plugins/files-v2/get?path=' + encodeURIComponent(path));
+        if (response.ok) {
+            const result = await response.json();
+            if (result.ok !== false && result.data?.text) return { ok: true, text: result.data.text };
+        }
+    } catch (e) { /* failed */ }
+
+    return { ok: false, error: 'Could not read file' };
+}
+
+/**
  * Install server plugin using Files API
  * @param {HTMLElement} button - The button element
  */
@@ -230,29 +402,8 @@ async function installServerPlugin(button) {
     button.disabled = true;
 
     try {
-        // Check if Files API is available
-        const checkResponse = await fetch('/api/plugins/files-v2/list?path=plugins');
-        if (!checkResponse.ok) {
-            throw new Error('Files plugin not available. Please install LennySuite Files plugin first, or copy the plugin manually.');
-        }
+        const result = await writeFileViaFilesApi('plugins/pyrunner/index.js', SERVER_PLUGIN_CODE);
 
-        // Write the plugin file
-        const writeResponse = await fetch('/api/plugins/files-v2/put', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                path: 'plugins/pyrunner/index.js',
-                text: SERVER_PLUGIN_CODE,
-                overwrite: true,
-            }),
-        });
-
-        if (!writeResponse.ok) {
-            const err = await writeResponse.text();
-            throw new Error('Failed to write plugin file: ' + err);
-        }
-
-        const result = await writeResponse.json();
         if (!result.ok) {
             throw new Error(result.error || 'Failed to write plugin file');
         }
@@ -282,18 +433,13 @@ async function enableServerPlugins(button) {
     button.disabled = true;
 
     try {
-        // Check if Files API is available
-        const checkResponse = await fetch('/api/plugins/files-v2/get?path=config.yaml');
-        if (!checkResponse.ok) {
+        // Read config.yaml
+        const readResult = await readFileViaFilesApi('config.yaml');
+        if (!readResult.ok) {
             throw new Error('Files plugin not available. Please manually edit config.yaml and set enableServerPlugins: true');
         }
 
-        const configResult = await checkResponse.json();
-        if (!configResult.ok) {
-            throw new Error('Could not read config.yaml: ' + (configResult.error || 'Unknown error'));
-        }
-
-        let configContent = configResult.data.text || '';
+        let configContent = readResult.text || '';
 
         // Check if already enabled
         if (/enableServerPlugins:\s*true/i.test(configContent)) {
@@ -313,23 +459,9 @@ async function enableServerPlugins(button) {
         }
 
         // Write back
-        const writeResponse = await fetch('/api/plugins/files-v2/put', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                path: 'config.yaml',
-                text: configContent,
-                overwrite: true,
-            }),
-        });
-
-        if (!writeResponse.ok) {
-            throw new Error('Failed to write config.yaml');
-        }
-
-        const result = await writeResponse.json();
-        if (!result.ok) {
-            throw new Error(result.error || 'Failed to update config.yaml');
+        const writeResult = await writeFileViaFilesApi('config.yaml', configContent);
+        if (!writeResult.ok) {
+            throw new Error(writeResult.error || 'Failed to update config.yaml');
         }
 
         button.innerHTML = '<i class="fa-solid fa-check"></i> Enabled!';

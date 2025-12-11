@@ -41,6 +41,15 @@ export function Settings(props) {
                             </label>
                         </div>
 
+                        <div class="pyrunner-plugin-install">
+                            <button id="pyrunner_install_plugin" class="menu_button" title="Install server plugin using Files API (requires LennySuite Files plugin)">
+                                <i class="fa-solid fa-download"></i> Install Server Plugin
+                            </button>
+                            <button id="pyrunner_copy_install_cmd" class="menu_button" title="Copy manual install command to clipboard">
+                                <i class="fa-solid fa-copy"></i> Copy Command
+                            </button>
+                        </div>
+
                         <div class="pyrunner-server-status-row">
                             <label>Server Status:</label>
                             <span id="pyrunner_server_status" class="pyrunner-status-na">N/A</span>
@@ -185,6 +194,20 @@ export function Settings(props) {
 
             .pyrunner-help li {
                 margin: 3px 0;
+            }
+
+            .pyrunner-plugin-install {
+                display: flex;
+                gap: 10px;
+                flex-wrap: wrap;
+                margin: 5px 0;
+            }
+
+            .pyrunner-plugin-install .menu_button {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                text-decoration: none;
             }
         </style>
     `;

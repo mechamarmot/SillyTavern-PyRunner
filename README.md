@@ -1,19 +1,45 @@
 # SillyTavern-PyRunner
 
-Execute Python code from STScript and Quick Replies using the `/pyrun` slash command.
+Execute Python code directly from STScript and Quick Replies.
 
 > **WARNING: USE AT YOUR OWN RISK**
 > This extension executes code. Only run Python code you understand and trust.
 
+## What's New
+
+- **Functions Library** - Save reusable Python functions and call them with `/pycall` or inline
+- **Virtual Environments** - Create isolated venvs with their own packages
+- **Dedicated Panel** - PyRunner now has its own drawer panel in the top nav
+- **Auto-Venv Execution** - Functions automatically run in the venv where they're stored
+- **Global & Character Scope** - Store functions globally or per-character
+- **Logging System** - Track script executions and errors (server mode)
+
 ## Features
 
-- **Dual Execution Modes:**
-  - **Pyodide (Browser)** - Sandboxed Python running in WebAssembly. No setup required.
-  - **Server (Local Python)** - Full Python environment with all installed packages.
-- **STScript Integration** - Use `/pyrun` in any STScript or Quick Reply
-- **Pipe Support** - Results flow through STScript pipes
-- **Package Management** - Install/uninstall Python packages from the UI or via `/pyinstall`
-- **Configurable Timeout** - Prevent runaway scripts
+- **Dual Execution Modes**
+  - **Pyodide (Browser)** - Sandboxed Python in WebAssembly. No setup required.
+  - **Server (Local Python)** - Full Python environment with all packages.
+
+- **Functions Library**
+  - Create reusable Python functions via UI modal editor
+  - Store functions per venv (each venv has its own library)
+  - Toggle between global and character-specific functions
+  - Call via `/pycall func_name` or inline in `/pyrun func_name()`
+  - Auto-detects which venv to use based on where function is stored
+
+- **Virtual Environment Management**
+  - Create/delete isolated Python environments
+  - Each venv has its own installed packages
+  - Switch between venvs from the UI or via `/pyvenv`
+
+- **Package Management**
+  - Install/uninstall packages per venv
+  - Visual package list with one-click uninstall
+  - Commands: `/pyinstall`, `/pyuninstall`
+
+- **STScript Integration**
+  - Results flow through STScript pipes
+  - Configurable timeout per command
 
 ## Installation
 
@@ -23,8 +49,6 @@ Use the built-in extension installer with this URL:
 ```
 https://github.com/mechamarmot/SillyTavern-PyRunner
 ```
-
-This installs both the UI extension and server plugin automatically.
 
 ### Manual Installation
 
@@ -50,22 +74,24 @@ Then restart SillyTavern.
 ## Setup
 
 1. Open SillyTavern
-2. Go to **Extensions** panel
-3. Find **PyRunner** settings
-4. **Check "Enable PyRunner"** (disabled by default for safety)
-5. Choose your execution mode (Pyodide or Server)
+2. Click the **microchip icon** in the top navigation bar to open PyRunner panel
+3. **Check "Enable PyRunner"** (disabled by default for safety)
+4. Choose your execution mode (Pyodide or Server)
+
+## Slash Commands
+
+| Command | Description |
+|---------|-------------|
+| `/pyrun <code>` | Execute Python code |
+| `/pycall <func> [args]` | Call a saved function |
+| `/pyfunc [subcommand]` | Manage functions library |
+| `/pyinstall <packages>` | Install pip packages |
+| `/pyuninstall <packages>` | Uninstall pip packages |
+| `/pyvenv [name\|create\|delete]` | Manage virtual environments |
 
 ## Usage
 
-### Basic Syntax
-
-```
-/pyrun <python code> | /echo {{pipe}}
-```
-
-Note: `/pyrun` returns output to the pipe, so use `/echo` or another command to display it.
-
-### One-Liners
+### Basic Execution
 
 ```
 /pyrun print("Hello, World!") | /echo {{pipe}}
@@ -83,82 +109,124 @@ Note: `/pyrun` returns output to the pipe, so use `/echo` or another command to 
 
 **Important:** Do NOT indent the first level of code. Python is indentation-sensitive.
 
-**Correct:**
-```
-/pyrun
-import random
-traits = ["brave", "cunning", "mysterious"]
-print(random.choice(traits)) | /echo {{pipe}}
-```
-
-**Wrong** (has leading spaces):
-```
-/pyrun
-  import random
-  print("this will fail")
-```
-
-### Functions and Blocks
-
-Indent only inside functions, loops, and conditionals:
-
 ```
 /pyrun
 import random
 def roll_dice(sides=20):
     return random.randint(1, sides)
-result = roll_dice()
-print(f"You rolled a {result}!") | /echo {{pipe}}
-```
-
-### Using Variables
-
-```
-/pyrun print(2 + 2) | /setvar key=result {{pipe}} | /echo The answer is {{getvar::result}}
+print(f"You rolled: {roll_dice()}") | /echo {{pipe}}
 ```
 
 ### Named Arguments
 
-Override execution mode per-command:
+Override execution mode:
 ```
 /pyrun mode=server import numpy as np; print(np.array([1,2,3])) | /echo {{pipe}}
 ```
 
-Set custom timeout (in milliseconds):
+Specify venv:
+```
+/pyrun venv=myenv print("Using myenv packages") | /echo {{pipe}}
+```
+
+Custom timeout (milliseconds):
 ```
 /pyrun timeout=5000 print("Quick operation") | /echo {{pipe}}
 ```
 
-### Installing Packages
+## Functions Library
 
-Use the `/pyinstall` command (server mode only):
+### Creating Functions
+
+1. Open PyRunner panel (microchip icon)
+2. Expand **Functions Library** section
+3. Select scope (Character or Global) and target venv
+4. Click **+ Create Function**
+5. Fill in name, description, and code
+6. Click **Save Function**
+
+### Calling Functions
+
+**Via /pycall:**
 ```
-/pyinstall numpy
-/pyinstall pandas matplotlib requests
+/pycall roll_dice | /echo {{pipe}}
+/pycall roll_dice 6 | /echo {{pipe}}
+/pycall calculate x=10 y=20 | /echo {{pipe}}
 ```
 
-Or use the UI in Extensions > PyRunner > Install Python Packages.
+**Inline in /pyrun:**
+```
+/pyrun result = roll_dice(20); print(f"Rolled: {result}") | /echo {{pipe}}
+```
+
+When you call a function, PyRunner automatically:
+1. Finds which venv the function is stored in
+2. Switches to that venv
+3. Executes using that venv's packages
+
+### Managing Functions
+
+```
+/pyfunc                    # List functions for current venv
+/pyfunc info roll_dice     # Show function details
+/pyfunc delete roll_dice   # Delete a function
+/pyfunc scope global       # Switch to global scope
+/pyfunc scope character    # Switch to character scope
+/pyfunc export             # Export all functions as JSON
+/pyfunc import <json>      # Import functions from JSON
+```
+
+## Virtual Environments
+
+### Via UI
+
+1. Open PyRunner panel
+2. Expand **Virtual Environments** section
+3. Use dropdown to select venv
+4. Enter name and click **Create** for new venv
+5. Click trash icon to delete (except default)
+
+### Via Command
+
+```
+/pyvenv                    # List venvs and show current
+/pyvenv myenv              # Switch to myenv
+/pyvenv create myenv       # Create new venv
+/pyvenv delete myenv       # Delete venv
+```
+
+### Package Management
+
+Packages install to the currently selected venv:
+
+```
+/pyinstall numpy pandas
+/pyinstall venv=myenv requests
+/pyuninstall matplotlib
+```
+
+Or use the UI in Virtual Environments section.
 
 ## Quick Reply Examples
-
-### Coin Flip
-```
-/pyrun import random; print(random.choice(["heads", "tails"])) | /echo {{pipe}}
-```
 
 ### Dice Roll (D20)
 ```
 /pyrun import random; print(f"You rolled: {random.randint(1, 20)}") | /echo {{pipe}}
 ```
 
-### Random Character Trait
+### Coin Flip
 ```
-/pyrun import random; traits = ["brave", "cunning", "mysterious", "cheerful", "melancholic", "sarcastic"]; mood = ["excited", "nervous", "calm", "agitated"]; print(f"{random.choice(traits)} and {random.choice(mood)}") | /echo {{pipe}}
+/pyrun import random; print(random.choice(["Heads", "Tails"])) | /echo {{pipe}}
+```
+
+### Random Trait Generator
+```
+/pyrun import random; traits = ["brave", "cunning", "mysterious", "cheerful"]; print(random.choice(traits)) | /echo {{pipe}}
 ```
 
 ### Magic 8-Ball
 ```
-/pyrun import random; answers = ["Yes", "No", "Maybe", "Ask again later", "Definitely", "Doubtful"]; print(f"The Magic 8-Ball says: {random.choice(answers)}") | /echo {{pipe}}
+/pyrun import random; answers = ["Yes", "No", "Maybe", "Ask again later", "Definitely", "Doubtful"]; print(f"🎱 {random.choice(answers)}") | /echo {{pipe}}
 ```
 
 ### Current Date/Time
@@ -168,26 +236,7 @@ Or use the UI in Extensions > PyRunner > Install Python Packages.
 
 ### Using NumPy (Server Mode)
 ```
-/pyrun mode=server import numpy as np; arr = np.array([1,2,3,4,5]); print(f"Sum: {arr.sum()}, Mean: {arr.mean()}") | /echo {{pipe}}
-```
-
-## Package Management
-
-### Via UI
-1. Go to Extensions > PyRunner
-2. Use "Install Python Packages" input field
-3. Click on any installed package to see options (Copy Name, Uninstall)
-4. Click refresh button to update the package list
-
-### Via Slash Command
-```
-/pyinstall <package names>
-```
-
-Examples:
-```
-/pyinstall numpy
-/pyinstall pandas matplotlib seaborn
+/pyrun mode=server import numpy as np; print(f"Sum: {np.array([1,2,3,4,5]).sum()}") | /echo {{pipe}}
 ```
 
 ## Execution Modes
@@ -197,44 +246,48 @@ Examples:
 - Runs entirely in your browser via WebAssembly
 - **Sandboxed** - cannot access filesystem or network
 - Includes Python standard library
-- First execution may be slow (loading ~10MB Pyodide runtime)
-- Great for: random generation, math, string manipulation, simple logic
+- First execution may be slow (loading ~10MB runtime)
+- Great for: random generation, math, string manipulation
 
 ### Server (Local Python)
 
 - Runs on your machine using your installed Python
-- Full access to **all installed packages** (numpy, pandas, requests, etc.)
+- Full access to **all installed packages**
 - Can access filesystem and network
+- Supports virtual environments
 - Requires `enableServerPlugins: true` in config.yaml
-- Great for: complex operations, using specialized libraries, file I/O
+- Great for: complex operations, specialized libraries, file I/O
 
 ## Security
 
-**Pyodide Mode:** Relatively safe - runs in browser sandbox. Cannot access your files or network.
+**Pyodide Mode:** Relatively safe - runs in browser sandbox.
 
-**Server Mode:** **DANGEROUS** - executes code directly on your machine with full access. Only use with code you completely trust and understand.
+**Server Mode:** **DANGEROUS** - executes code directly on your machine with full access. Only use with code you completely trust.
 
 ## Troubleshooting
 
 ### "PyRunner is disabled"
-Enable it in Extensions > PyRunner settings.
-
-### "pip is not installed or not available"
-Your Python installation doesn't have pip. Install pip or use a Python distribution that includes it.
-
-### IndentationError
-Make sure your multi-line code has no leading spaces on the first level. Only indent inside functions/loops/conditionals.
+Enable it in the PyRunner panel (microchip icon in top nav).
 
 ### Server mode shows "Not available"
 1. Check `enableServerPlugins: true` in config.yaml
-2. Verify plugin is in `SillyTavern/plugins/pyrunner/`
+2. Verify plugin exists in `SillyTavern/plugins/pyrunner/`
 3. Restart SillyTavern
 
-### First execution is slow (Pyodide)
-Pyodide needs to download ~10MB on first use. Subsequent executions are faster.
+### "pip is not installed"
+Your Python installation doesn't have pip. Install pip or use a distribution that includes it.
 
-### 403 Forbidden errors
-This was a CSRF issue in older versions. Update to the latest version.
+### IndentationError
+Multi-line code must have no leading spaces on the first level. Only indent inside functions/loops/conditionals.
+
+### First execution is slow (Pyodide)
+Pyodide downloads ~10MB on first use. Subsequent executions are faster.
+
+### Function not found
+Check that:
+1. You're in the correct scope (Character vs Global)
+2. The function exists in the venv you're targeting
+3. Use `/pyfunc` to list available functions
 
 ## Development
 

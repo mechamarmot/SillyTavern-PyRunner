@@ -41,11 +41,12 @@ export class PyRunner {
     async execute(code, options = {}) {
         const mode = options.mode || this.mode;
         const timeout = options.timeout || this.settings.timeout || 30000;
+        const venv = options.venv || this.settings.selectedVenv || 'default';
 
         if (mode === 'pyodide') {
             return this.executePyodide(code, timeout);
         } else {
-            return this.executeServer(code, timeout);
+            return this.executeServer(code, timeout, venv);
         }
     }
 
@@ -164,9 +165,10 @@ sys.stderr = StringIO()
      * Execute code via server plugin
      * @param {string} code - Python code
      * @param {number} timeout - Timeout in ms
+     * @param {string} venv - Virtual environment name
      * @returns {Promise<string>}
      */
-    async executeServer(code, timeout) {
+    async executeServer(code, timeout, venv = 'default') {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -174,7 +176,7 @@ sys.stderr = StringIO()
             const response = await fetch(`${this.settings.serverUrl}/execute`, {
                 method: 'POST',
                 headers: this.getHeaders(),
-                body: JSON.stringify({ code, timeout }),
+                body: JSON.stringify({ code, timeout, venv }),
                 signal: controller.signal,
             });
 

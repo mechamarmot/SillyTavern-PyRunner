@@ -297,6 +297,12 @@ async function init() {
     // Create PyRunner instance
     pyRunner = new PyRunner(extensionSettings);
 
+    // Expose PyRunner instance globally for other extensions to use
+    if (!window.SillyTavern) {
+        window.SillyTavern = {};
+    }
+    window.SillyTavern.PyRunner = pyRunner;
+
     // Register slash command
     registerSlashCommand();
 

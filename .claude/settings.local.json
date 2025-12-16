@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(npm install:*)",
+      "Bash(npx playwright install:*)",
+      "Bash(git show-ref:*)",
+      "Bash(git update-ref:*)",
+      "Bash(git reflog:*)",
+      "Bash(git gc:*)",
+      "Bash(npm test)",
+      "Bash(cat:*)",
+      "Bash(npx playwright test:*)",
+      "Bash(dir:*)",
+      "Bash(ls:*)",
+      "Bash(wait)",
+      "Bash(copy /Y \"c:\\Repos\\SillyTavern-PyRunner\\server-plugin\\index.js\" \"C:\\ST-dev\\SillyTavern\\plugins\\pyrunner\\index.js\")",
+      "Bash(gh:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

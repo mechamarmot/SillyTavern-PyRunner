@@ -18,7 +18,9 @@
       "Bash(copy /Y \"c:\\Repos\\SillyTavern-PyRunner\\server-plugin\\index.js\" \"C:\\ST-dev\\SillyTavern\\plugins\\pyrunner\\index.js\")",
       "Bash(gh:*)",
       "Bash(git init:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git rm:*)",
+      "Bash(npm run build:*)"
     ]
   }
 }

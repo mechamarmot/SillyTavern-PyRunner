@@ -18,9 +18,10 @@ const defaultSettings = {
     timeout: 30000,
     selectedVenv: 'default', // Selected virtual environment for server mode
     functionScope: 'character', // 'global' or 'character'
+    selectedCharacter: null, // Selected character ID for character scope
     functions: {
         global: {},    // Global functions shared across characters
-        character: {}, // Character-specific functions
+        character: {}, // Character-specific functions keyed by character ID
     },
 };
 
@@ -99,14 +100,80 @@ function getCurrentFunctionKey() {
 }
 
 /**
+ * Get the list of available characters
+ * @returns {Array<{id: string, name: string}>}
+ */
+function getCharacters() {
+    const context = SillyTavern.getContext();
+    const characters = context.characters || [];
+
+    return characters.map((char, index) => ({
+        id: char.avatar || `char_${index}`, // Use avatar as unique ID
+        name: char.name || `Character ${index + 1}`,
+    }));
+}
+
+/**
+ * Get the current character ID
+ * @returns {string | null}
+ */
+function getCurrentCharacterId() {
+    const context = SillyTavern.getContext();
+    const characterId = context.characterId;
+
+    if (characterId !== undefined && characterId !== null) {
+        const characters = context.characters || [];
+        const char = characters[characterId];
+        return char?.avatar || `char_${characterId}`;
+    }
+
+    return null;
+}
+
+/**
+ * Get the selected character ID for function scope
+ * @returns {string | null}
+ */
+function getSelectedCharacterId() {
+    if (extensionSettings.functionScope !== 'character') {
+        return null;
+    }
+
+    // Use selectedCharacter if set, otherwise use current character
+    if (extensionSettings.selectedCharacter) {
+        return extensionSettings.selectedCharacter;
+    }
+
+    const currentCharId = getCurrentCharacterId();
+    if (currentCharId) {
+        extensionSettings.selectedCharacter = currentCharId;
+        saveSettingsDebounced();
+    }
+
+    return currentCharId;
+}
+
+/**
  * Get functions for a specific scope and key
  * @param {string} scope - 'global' or 'character'
  * @param {string} key - venv name or 'pyodide'
+ * @param {string} [characterId] - character ID (only used when scope is 'character')
  * @returns {Array}
  */
-function getFunctionsForKey(scope, key) {
+function getFunctionsForKey(scope, key, characterId = null) {
     const scopeData = extensionSettings.functions[scope];
     if (!scopeData) return [];
+
+    if (scope === 'character') {
+        const charId = characterId || getSelectedCharacterId();
+        if (!charId) return [];
+
+        // Functions are stored as: character[characterId][key]
+        const charData = scopeData[charId];
+        if (!charData) return [];
+        return charData[key] || [];
+    }
+
     return scopeData[key] || [];
 }
 
@@ -126,6 +193,13 @@ function getCurrentFunctions() {
  */
 function getAllFunctionsForScope() {
     const scope = extensionSettings.functionScope || 'character';
+
+    if (scope === 'character') {
+        const charId = getSelectedCharacterId();
+        if (!charId) return {};
+        return extensionSettings.functions[scope]?.[charId] || {};
+    }
+
     return extensionSettings.functions[scope] || {};
 }
 
@@ -137,7 +211,15 @@ function getAllFunctionsForScope() {
 function findFunctionByName(name) {
     const scope = extensionSettings.functionScope || 'character';
     const currentKey = getCurrentFunctionKey();
-    const allFunctions = extensionSettings.functions[scope] || {};
+
+    let allFunctions = {};
+    if (scope === 'character') {
+        const charId = getSelectedCharacterId();
+        if (!charId) return null;
+        allFunctions = extensionSettings.functions[scope]?.[charId] || {};
+    } else {
+        allFunctions = extensionSettings.functions[scope] || {};
+    }
 
     // Search current venv/mode first
     const currentFuncs = allFunctions[currentKey] || [];
@@ -182,11 +264,28 @@ function saveFunction(func, targetKey = null) {
     if (!extensionSettings.functions[scope]) {
         extensionSettings.functions[scope] = {};
     }
-    if (!extensionSettings.functions[scope][key]) {
-        extensionSettings.functions[scope][key] = [];
+
+    let funcs;
+    if (scope === 'character') {
+        const charId = getSelectedCharacterId();
+        if (!charId) {
+            return { success: false, error: 'No character selected' };
+        }
+
+        if (!extensionSettings.functions[scope][charId]) {
+            extensionSettings.functions[scope][charId] = {};
+        }
+        if (!extensionSettings.functions[scope][charId][key]) {
+            extensionSettings.functions[scope][charId][key] = [];
+        }
+        funcs = extensionSettings.functions[scope][charId][key];
+    } else {
+        if (!extensionSettings.functions[scope][key]) {
+            extensionSettings.functions[scope][key] = [];
+        }
+        funcs = extensionSettings.functions[scope][key];
     }
 
-    const funcs = extensionSettings.functions[scope][key];
     const existingIdx = funcs.findIndex(f => f.name === func.name);
 
     const now = Date.now();
@@ -219,11 +318,24 @@ function deleteFunction(name, targetKey = null) {
     const scope = extensionSettings.functionScope || 'character';
     const key = targetKey || getCurrentFunctionKey();
 
-    if (!extensionSettings.functions[scope] || !extensionSettings.functions[scope][key]) {
-        return { success: false, error: 'Function not found' };
+    let funcs;
+    if (scope === 'character') {
+        const charId = getSelectedCharacterId();
+        if (!charId) {
+            return { success: false, error: 'No character selected' };
+        }
+
+        if (!extensionSettings.functions[scope]?.[charId]?.[key]) {
+            return { success: false, error: 'Function not found' };
+        }
+        funcs = extensionSettings.functions[scope][charId][key];
+    } else {
+        if (!extensionSettings.functions[scope]?.[key]) {
+            return { success: false, error: 'Function not found' };
+        }
+        funcs = extensionSettings.functions[scope][key];
     }
 
-    const funcs = extensionSettings.functions[scope][key];
     const idx = funcs.findIndex(f => f.name === name);
 
     if (idx < 0) {
@@ -1849,6 +1961,10 @@ async function renderSettings() {
     // Fetch log config from server if in server mode
     const logConfig = extensionSettings.executionMode === 'server' ? await fetchLogConfig() : cachedLogConfig;
 
+    // Get characters list
+    const characters = getCharacters();
+    const selectedCharacter = getSelectedCharacterId();
+
     const settingsHtml = Settings({
         enabled: extensionSettings.enabled,
         executionMode: extensionSettings.executionMode,
@@ -1857,6 +1973,8 @@ async function renderSettings() {
         logConfig: logConfig,
         functionScope: extensionSettings.functionScope,
         functionCount: getFunctionCount(),
+        selectedCharacter: selectedCharacter,
+        characters: characters,
     });
 
     // Create the drawer structure (matching Sorcery extension pattern)
@@ -2105,6 +2223,7 @@ async function renderSettings() {
     // Scope toggle buttons
     const scopeCharacterBtn = drawerPanel.querySelector('#pyrunner_scope_character');
     const scopeGlobalBtn = drawerPanel.querySelector('#pyrunner_scope_global');
+    const characterRow = drawerPanel.querySelector('.pyrunner-func-character-row');
 
     if (scopeCharacterBtn && scopeGlobalBtn) {
         scopeCharacterBtn.addEventListener('click', () => {
@@ -2112,6 +2231,7 @@ async function renderSettings() {
             saveSettingsDebounced();
             scopeCharacterBtn.classList.add('menu_button_selected');
             scopeGlobalBtn.classList.remove('menu_button_selected');
+            if (characterRow) characterRow.style.display = 'flex';
             renderFunctionsList();
             updateFunctionCountBadge();
         });
@@ -2121,6 +2241,18 @@ async function renderSettings() {
             saveSettingsDebounced();
             scopeGlobalBtn.classList.add('menu_button_selected');
             scopeCharacterBtn.classList.remove('menu_button_selected');
+            if (characterRow) characterRow.style.display = 'none';
+            renderFunctionsList();
+            updateFunctionCountBadge();
+        });
+    }
+
+    // Character select for character scope
+    const funcCharacterSelect = drawerPanel.querySelector('#pyrunner_func_character_select');
+    if (funcCharacterSelect) {
+        funcCharacterSelect.addEventListener('change', () => {
+            extensionSettings.selectedCharacter = funcCharacterSelect.value;
+            saveSettingsDebounced();
             renderFunctionsList();
             updateFunctionCountBadge();
         });

@@ -4,7 +4,7 @@
  * @returns {string} - HTML string
  */
 export function Settings(props) {
-    const { enabled, executionMode, timeout, selectedVenv, logConfig, functionScope, functionCount } = props;
+    const { enabled, executionMode, timeout, selectedVenv, logConfig, functionScope, functionCount, selectedCharacter, characters } = props;
 
     // Default log config values
     const logEnabled = logConfig?.enabled ?? true;
@@ -132,6 +132,15 @@ export function Settings(props) {
                                         <i class="fa-solid fa-globe"></i> Global
                                     </button>
                                 </div>
+                            </div>
+
+                            <div class="pyrunner-func-character-row" style="display: ${functionScope !== 'global' ? 'flex' : 'none'};">
+                                <label>Character:</label>
+                                <select id="pyrunner_func_character_select" class="text_pole">
+                                    ${characters && characters.length > 0
+                                        ? characters.map(char => `<option value="${char.id}" ${selectedCharacter === char.id ? 'selected' : ''}>${char.name}</option>`).join('')
+                                        : '<option value="">No characters available</option>'}
+                                </select>
                             </div>
 
                             <div class="pyrunner-func-mode-row">
@@ -834,6 +843,21 @@ export function Settings(props) {
             .pyrunner-func-scope-toggle .menu_button_selected {
                 background: var(--SmartThemeQuoteColor, #4a7c59);
                 border-color: var(--SmartThemeQuoteColor, #4a7c59);
+            }
+
+            .pyrunner-func-character-row {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+
+            .pyrunner-func-character-row > label {
+                font-size: 0.85em;
+                min-width: 70px;
+            }
+
+            .pyrunner-func-character-row select {
+                flex: 1;
             }
 
             .pyrunner-func-mode-row {

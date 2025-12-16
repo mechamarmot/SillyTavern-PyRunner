@@ -6,7 +6,7 @@
     "js": "dist/index.js",
     "css": "",
     "author": "mechamarmot",
-    "version": "2.0.3",
+    "version": "2.0.4",
     "homePage": "https://github.com/mechamarmot/SillyTavern-PyRunner",
     "auto_update": true,
     "description": "Execute Python code from STScript and Quick Replies using /pyrun command"

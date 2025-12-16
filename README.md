@@ -57,19 +57,9 @@ cd SillyTavern/public/scripts/extensions/third-party
 git clone https://github.com/mechamarmot/SillyTavern-PyRunner
 ```
 
-Then copy the server plugin:
-```bash
-cp -r SillyTavern-PyRunner/server-plugin SillyTavern/plugins/pyrunner
-```
+The server plugin installs automatically when you enable the extension.
 
-### Enable Server Plugins
-
-In your `config.yaml`, set:
-```yaml
-enableServerPlugins: true
-```
-
-Then restart SillyTavern.
+Restart SillyTavern after installation.
 
 ## Setup
 
@@ -270,9 +260,9 @@ Or use the UI in Virtual Environments section.
 Enable it in the PyRunner panel (microchip icon in top nav).
 
 ### Server mode shows "Not available"
-1. Check `enableServerPlugins: true` in config.yaml
-2. Verify plugin exists in `SillyTavern/plugins/pyrunner/`
-3. Restart SillyTavern
+1. Restart SillyTavern (plugin auto-installs on first enable)
+2. Check that PyRunner extension is enabled
+3. Verify `enableServerPlugins: true` in config.yaml
 
 ### "pip is not installed"
 Your Python installation doesn't have pip. Install pip or use a distribution that includes it.
